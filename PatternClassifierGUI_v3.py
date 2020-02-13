@@ -296,7 +296,6 @@ class GUI(Tk):
         key_list = list()
 
         for memory_path in memory_paths:
-            memory_list.append(memory_path)
             split_memory_path = split("_*_", split("\\\\", memory_path)[-1][:-4])
             cur_keyf = [item for idx, item in enumerate(split_memory_path) if
                         self.relevant_memory_name_pieces[idx] == 1]
@@ -306,15 +305,14 @@ class GUI(Tk):
             for item in cur_keyf[1:]:
                 cur_key = [keys for keys in cur_key if "_" + item + "_" in keys]
 
-
-            if len(cur_key) > 1:
-                messagebox.showerror("Warning",
-                                     "More than one key file was matched. Check your relevant memory name pieces!")
-
-                show_problem_file(memory_path, cur_key)
-                return
-            elif len(cur_key) == 1:
-                key_list.append(cur_key[0])
+            # if len(cur_key) > 1:
+            #     messagebox.showerror("Warning",
+            #                          "More than one key file was matched. Check your relevant memory name pieces!")
+            #
+            #     show_problem_file(memory_path, cur_key)
+            #     return
+            if len(cur_key) > 0:
+                key_list.extend(cur_key)
             else:
                 cur_key = glob(self.input_path.get() + '\\*' + "_*".join(cur_keyf) + "_*key*csv")  # try lower case
                 if len(cur_key) > 1:
@@ -323,11 +321,14 @@ class GUI(Tk):
                     show_problem_file(memory_path, cur_key)
 
                     return
-                elif len(cur_key) == 1:
-                    key_list.append(cur_key[0])
+                if len(cur_key) > 0:
+                    key_list.extend(cur_key)
                 else:
                     show_problem_file(memory_path, cur_key)
                 return
+
+            # Append the appropriate number of memory path repetitions in case one memory has more than one key
+            memory_list.extend([memory_path for _ in range(len(cur_key))])
 
         memory_key_table_window = Toplevel(self)
         memory_key_table_window.title("Looking good!")
@@ -392,7 +393,7 @@ class GUI(Tk):
         # Just to make picking a path faster
         if self.input_path.get() == '':
             self.input_path.set(self.output_path.get())
-aaaaaaaaa
+
     def load_classifier_variables(self):
         if len(self.memory_key_pairing_list) > 0:
             pass
