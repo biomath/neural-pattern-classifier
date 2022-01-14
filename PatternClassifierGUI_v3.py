@@ -1,5 +1,6 @@
 ### GUI
 import csv
+from os import remove
 from time import sleep
 from tkinter import *
 from tkinter import messagebox, ttk
@@ -7,12 +8,18 @@ from tkinter.filedialog import askdirectory
 from re import match, split
 from matplotlib.backends.backend_pdf import PdfPages
 from glob import glob
+from traceback import format_exc
+from pandas import concat, read_csv
+from gc import collect
 
-import multiprocessing as mp
+from multiprocessing import Pool, cpu_count, current_process
 
 from pattern_classifier_mainloop import run_classification
 
 class OnlyNumbersEntry(Entry):
+    """
+    Restrict to number entries on text entries
+    """
     def __init__(self, master=None, value=None, positive_num=False, **kwargs):
         self.var = StringVar(master, value=value)
         Entry.__init__(self, master, textvariable=self.var, **kwargs)
@@ -45,6 +52,10 @@ class OnlyNumbersEntry(Entry):
 
 
 class Checkbar(Frame):
+    """
+    Checkbar class
+    Not implemented
+    """
     def __init__(self, parent=None, picks=[], side=LEFT, anchor=W):
         Frame.__init__(self, parent)
         self.vars = []
@@ -60,6 +71,9 @@ class Checkbar(Frame):
 
 
 class GUI(Tk):
+    """
+    The main GUI class
+    """
     def __init__(self):
         # GUI
         Tk.__init__(self)
@@ -73,7 +87,7 @@ class GUI(Tk):
         self.top_frame.pack(side=TOP)
         self.bottom_frame.pack(side=BOTTOM)
 
-        # Initialize globals
+        ##### Initialize globals #####
         self.input_path = StringVar(self)
         self.output_path = StringVar(self)
         self.master_sheet_name = StringVar(self)
@@ -83,7 +97,7 @@ class GUI(Tk):
         # This variable is to detect whether output has been set;
         # Program will also check for memory_key_pairing_list integrity (therefore also input validity)
         self.output_path_set = BooleanVar(self)
-        self.pool= None
+        self.pool = None
 
         self.number_of_simulations = IntVar(self)
         self.pre_stimulus_time = DoubleVar(self)
@@ -92,12 +106,13 @@ class GUI(Tk):
         self.post_stimulus_raster = DoubleVar(self)
         self.number_of_cores = IntVar(self)
 
+        # Progress bar is not implemented yet
         self.progressbar_progress = DoubleVar(self)
         self.progressbar_increment = DoubleVar(self)
 
         self.classifier_methods = ['rcorr', 'count', 'cross_corr', 'dtw']
         self.sigma_set = [1, 2, 4, 8, 16, 32, 64, 128, 256]
-        self.bin_set = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
+        self.bin_set = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 'Stim duration']
         self.relevant_memory_name_pieces = list()
         self.memory_key_pairing_list = list()
 
@@ -107,6 +122,7 @@ class GUI(Tk):
         # display the menu
         self.config(menu=self.menubar)
 
+        ##### Initialize widgets #####
         left_row_counter = 0
         right_row_counter = 0
 
@@ -162,7 +178,8 @@ class GUI(Tk):
         self.brain_area_popup.grid(row=left_row_counter, column=1, sticky=E)
         left_row_counter += 1
 
-        # Checkbar.state() to output the list
+        # Checkbar.state() to output the list; not implemented yet
+
         self.brain_area_info_label = Label(self.top_frame, text="Classifier algorithms to run:")
         self.brain_area_info_label.grid(row=left_row_counter, column=0, sticky=E)
         left_row_counter += 1
@@ -237,10 +254,11 @@ class GUI(Tk):
         self.withdraw()
         popup = Toplevel()
         popup.title("About")
-        msg = Message(popup, text="This program generates polar histograms for plotting"
-                                  " gravitropism data. The maximum radius (plant count) per angle is 70.\n"
+        msg = Message(popup, text="This program runs the intertrial Pattern Classifier"
+                                  " for neuronal recording data \n"
+                                  "Based on Caras et al., 2016 \n"
                                   "Developer: Matheus Macedo-Lima\n"
-                                  "Questions, problems, compliments: mmlima@umass.edu")
+                                  "Questions, problems, compliments: math.biomatter@gmail.com")
         # popup.iconbitmap(r'c:\Users\Matheus\PycharmProjects\polar_hist\Gouache-arabidopsis-thaliana.ico')
         button = Button(popup, text="Close", command=lambda: self.kill_popup(popup))
         msg.pack()
@@ -257,6 +275,11 @@ class GUI(Tk):
 
 
     def check_memory_key_pairing(self):
+        """
+        This funcion checks for memory vs key file pairings.
+        More than one memory per key is allowed.
+        More than one key per memory will flag an error.
+        """
         def show_problem_file(problem_memory_path, problem_key_path_or_list=None):
             self.show_memory_checkbar_window(self.input_path.get(), run_check_memory_key_pairings=True)
             memory_key_table_window = Toplevel(self)
@@ -353,9 +376,14 @@ class GUI(Tk):
 
     @staticmethod
     def update_Checkbar(bar, text):
+        # Not implemented
         bar.set(text)
 
     def show_memory_checkbar_window(self, temp_input_path, run_check_memory_key_pairings=False):
+        """
+        Checkbar
+        Not implemented yet
+        """
         def ok_button_run(memory_checkbar):
             self.relevant_memory_name_pieces = memory_checkbar.state()
             self.kill_popup(memory_checkbar_window)
@@ -378,7 +406,7 @@ class GUI(Tk):
     def choose_input_path(self):
         self.input_path.set(askdirectory(initialdir=self.input_path.get(), title="Choose input folder"))
         self.show_memory_checkbar_window(self.input_path.get(), run_check_memory_key_pairings=True)
-        # Just to make picking a path faster
+        # Just to make picking a path faster potentially, make output the same as input
         if self.output_path.get() == '':
             self.output_path.set(self.input_path.get())
 
@@ -404,13 +432,6 @@ class GUI(Tk):
         master_sheet_name = self.master_sheet_name_entry.get()
         accuracies_master_sheet_fullpath = self.output_path.get() + "\\" + master_sheet_name + '_accuracies.csv'
         statistics_master_sheet_fullpath = self.output_path.get() + "\\" + master_sheet_name + '_statistics.csv'
-        with open(accuracies_master_sheet_fullpath, 'w', newline='') as file:
-            writer = csv.writer(file, delimiter=',')
-            writer.writerow(['Memory'] + ['Method'] + ['Stimulus'] + ['Accuracy'])
-        with open(statistics_master_sheet_fullpath, 'w', newline='') as file:
-            writer = csv.writer(file, delimiter=',')
-            writer.writerow(['Memory'] + ['Method'] + ['T.statistic'] + ['P.value'] + ['Cohen.d'] +
-                            ['CI.significance'] + ['Sigma'] + ['Bin.size'])
 
         number_of_simulations = int(self.number_of_simulations_entry.get())
         pre_stimulus_time = float(self.pre_stimulus_time_entry.get())
@@ -419,11 +440,11 @@ class GUI(Tk):
         post_stimulus_raster = float(self.post_stimulus_raster_entry.get())
 
         if self.all_cores.get() == 1:
-            # number_of_cores = mp.cpu_count()
-            number_of_cores = 1  # only run in one core for now, until I figure out how to queue results correctly
+            number_of_cores = cpu_count()
+            # number_of_cores = 1  # only run in one core for now, until I figure out how to queue results correctly
         else:
-            # number_of_cores = mp.cpu_count() // 2  # use half the number of cores if not all
-            number_of_cores = 1  # only run in one core for now, until I figure out how to queue results correctly
+            number_of_cores = cpu_count() // 2  # use half the number of cores if not all
+            # number_of_cores = 1  # only run in one core for now, until I figure out how to queue results correctly
 
         classifier_methods = [item for idx, item in enumerate(self.classifier_methods) if
                               self.classifier_methods_checkbar.state()[idx] == 1]
@@ -444,6 +465,7 @@ class GUI(Tk):
                                sigma_set, bin_set])
 
         self.run_cancel_popup = Toplevel(self)
+
         self.do_run_button = Button(self.run_cancel_popup, text="Click here to run",
                                command=lambda: self.activate_mp(input_list, number_of_cores))
         self.do_run_button.config(font=('helvetica', 10, 'bold'))
@@ -469,6 +491,25 @@ class GUI(Tk):
     def close_pool(self):
         self.pool.join()
 
+    def compile_result_csv(self):
+        master_sheet_name = self.master_sheet_name_entry.get()
+        accuracies_master_sheet_fullpath = self.output_path.get() + "\\" + master_sheet_name + '_accuracies.csv'
+        statistics_master_sheet_fullpath = self.output_path.get() + "\\" + master_sheet_name + '_statistics.csv'
+        with open(accuracies_master_sheet_fullpath, 'w', newline='') as file:
+            writer = csv.writer(file, delimiter=',')
+            writer.writerow(['Memory'] + ['Key'] + ['Method'] + ['Stimulus'] + ['Accuracy'])
+        with open(statistics_master_sheet_fullpath, 'w', newline='') as file:
+            writer = csv.writer(file, delimiter=',')
+            writer.writerow(['Memory'] + ['Key'] + ['Method'] + ['T.statistic'] + ['P.value'] + ['Cohen.d'] +
+                            ['CI.significance'] + ['Sigma'] + ['Bin.size'])
+
+        for cur_master_sheet_path in [accuracies_master_sheet_fullpath, statistics_master_sheet_fullpath]:
+            process_files = glob(cur_master_sheet_path[:-4] + "_*.csv")
+            df_merged = (read_csv(f, sep=',', header=None) for f in process_files)
+            df_merged = concat(df_merged, ignore_index=True)
+            df_merged.to_csv(cur_master_sheet_path, mode='a', header=False, index=False)
+
+            [remove(f) for f in process_files]
 
     def check_pool_completion(self):
         if self.pool_map_result.ready():
@@ -478,6 +519,7 @@ class GUI(Tk):
             self.done_button.config(font=('helvetica', 20, 'bold'))
             self.done_button.pack()
             self.close_pool()
+            self.compile_result_csv()
         else:
             self.after(500, self.check_pool_completion)
 
@@ -486,43 +528,69 @@ class GUI(Tk):
         self.do_run_button.configure(state=DISABLED)
         self.cancel_button.configure(state=NORMAL)
 
-        self.pool = mp.Pool(number_of_cores)
+        self.pool = Pool(number_of_cores)
 
         self.pool_map_result = self.pool.map_async(self.run_pattern_classifier, input_list)
         self.pool.close()
-
         self.check_pool_completion()
-
 
     @staticmethod
     def run_pattern_classifier(input_list):
+        """
+        Main driver
+        Grab inputs from list and run on separate cores
+        """
         cur_memory_name, cur_key_name, cur_output_path, \
         accuracies_master_sheet_fullpath, statistics_master_sheet_fullpath, \
         number_of_simulations, pre_stimulus_time, post_stimulus_time, \
         pre_stimulus_raster, post_stimulus_raster, brain_area, classifier_methods, \
         sigma_set, bin_set = input_list
 
-        output_name = "_".join(split("_*_", split("\\\\", cur_memory_name)[-1][:-4]))
+        output_name = "_".join(split("_*_", split("\\\\", cur_memory_name)[-1][:-4])) + '_with_' + \
+                      "_".join(split("_*_", split("\\\\", cur_key_name)[-1][:-4]))
 
         with PdfPages(cur_output_path + "\\" + output_name + '.pdf') as pdf:
             for method in classifier_methods:
-                run_classification(memory_name=cur_memory_name,
-                                   key_name=cur_key_name,
-                                   method=method,
-                                   sampling_rate=0.001,
-                                   # fixed sampling rate (for rasterization purposes; will skip spikes faster than this)
-                                   pre_stimulus_time=pre_stimulus_time,
-                                   post_stimulus_time=post_stimulus_time,
-                                   pre_stimulus_raster=pre_stimulus_raster,
-                                   post_stimulus_raster=post_stimulus_raster,
-                                   brain_area=brain_area,
-                                   accuracies_master_sheet_fullpath=accuracies_master_sheet_fullpath,
-                                   statistics_master_sheet_fullpath=statistics_master_sheet_fullpath,
-                                   unit_name=output_name,
-                                   number_of_simulations=number_of_simulations,
-                                   count_bin_set=bin_set,
-                                   sigma_set=sigma_set,
-                                   file_name=output_name, pdf_handle=pdf)
+                try:
+                    run_classification(memory_name=cur_memory_name,
+                                       key_name=cur_key_name,
+                                       method=method,
+                                       output_path=cur_output_path,
+
+                                       # fixed refractory period for rasterization purposes;
+                                       # will skip spikes faster than this, but making it smaller will increase
+                                       # computation time
+                                       refractory_period=0.001,
+
+                                       pre_stimulus_time=pre_stimulus_time,
+                                       post_stimulus_time=post_stimulus_time,
+                                       pre_stimulus_raster=pre_stimulus_raster,
+                                       post_stimulus_raster=post_stimulus_raster,
+                                       brain_area=brain_area,
+
+                                       # Make these unique per process, then combine all after Pool is ready
+                                       accuracies_master_sheet_fullpath=accuracies_master_sheet_fullpath[:-4] + "_" + current_process().name + ".csv",
+                                       statistics_master_sheet_fullpath=statistics_master_sheet_fullpath[:-4] + current_process().name + ".csv",
+
+                                       unit_name=output_name,
+                                       number_of_simulations=number_of_simulations,
+                                       count_bin_set=bin_set,
+                                       sigma_set=sigma_set,
+                                       file_name=output_name, pdf_handle=pdf)
+                    # Force Python to collect garbage
+                    collect()
+
+                except Exception:
+                    print("Error in running: " + cur_memory_name)
+                    print("The following error occurred: ")
+                    print(format_exc())
+                    print("\n\n")
+
+                    # Force Python to collect garbage
+                    collect()
+
+                    continue
+
 
 
     def on_closing(self):
