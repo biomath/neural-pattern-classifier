@@ -504,7 +504,7 @@ class GUI(Tk):
                             ['CI.significance'] + ['Sigma'] + ['Bin.size'])
 
         for cur_master_sheet_path in [accuracies_master_sheet_fullpath, statistics_master_sheet_fullpath]:
-            process_files = glob(cur_master_sheet_path[:-4] + "_*.csv")
+            process_files = glob(cur_master_sheet_path[:-4] + "*SpawnPoolWorker*.csv")
             df_merged = (read_csv(f, sep=',', header=None) for f in process_files)
             df_merged = concat(df_merged, ignore_index=True)
             df_merged.to_csv(cur_master_sheet_path, mode='a', header=False, index=False)

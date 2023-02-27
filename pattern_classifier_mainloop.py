@@ -287,7 +287,6 @@ def run_classification(memory_name,
                        key_name=None,
                        dtw_radius=None,
                        downsample_q=None,
-                       stim_names=None,
                        sigma_set=(1, 2, 4, 8, 16, 32, 64, 128, 256),
                        write_master_sheet=True,
                        save_plot=True,
@@ -440,9 +439,9 @@ def run_classification(memory_name,
             f.clear()
             plt.close(f)
 
-        if stim_names is None:
-            number_of_stimuli = len(accuracy_matrix[0])
-            stim_names = ['STIM' + str(num) for num in np.arange(1, number_of_stimuli + 1)]
+
+        # Acquire stim names
+        stim_names = list(peristim_dict.keys())
 
         if save_plot is True:
             logging.info('Plotting confusion matrices...')
